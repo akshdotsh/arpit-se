@@ -9,10 +9,11 @@ import bcrypt from 'bcryptjs';
 
 /**
  * User roles enum
+ * Ordered with PHARMACIST as the primary role (id 1)
  */
 export enum UserRole {
-  ADMIN = 'admin',
   PHARMACIST = 'pharmacist',
+  ADMIN = 'admin',
   SUPPLIER = 'supplier',
 }
 
@@ -59,7 +60,7 @@ const userSchema = new Schema<IUser>(
     role: {
       type: String,
       enum: Object.values(UserRole),
-      default: UserRole.SUPPLIER,
+      default: UserRole.PHARMACIST,
       required: true,
     },
     isActive: {
