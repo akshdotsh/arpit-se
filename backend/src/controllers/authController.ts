@@ -4,6 +4,7 @@
  */
 
 import { Request, Response } from 'express';
+import mongoose from 'mongoose';
 import { User, UserRole } from '../models/User';
 import { generateToken } from '../utils/jwt';
 import logger, { logAuth } from '../utils/logger';
@@ -32,6 +33,26 @@ export const register = async (req: Request, res: Response): Promise<void> => {
 
     const { name, email, password, role } = req.body;
 
+    // Validate role if provided
+    // Default to PHARMACIST if no role is specified
+    let validRole: UserRole = UserRole.PHARMACIST;
+    if (role) {
+      // Check if the provided role is a valid UserRole enum value
+      if (!Object.values(UserRole).includes(role as UserRole)) {
+        logAuth('Registration failed: Invalid role', undefined, {
+          email: email.toLowerCase(),
+          providedRole: role,
+          validRoles: Object.values(UserRole),
+        });
+        res.status(400).json({
+          success: false,
+          message: `Invalid role. Role must be one of: ${Object.values(UserRole).join(', ')}`,
+        });
+        return;
+      }
+      validRole = role as UserRole;
+    }
+
     // Check if user already exists
     const existingUser = await User.findOne({ email: email.toLowerCase() });
     if (existingUser) {
@@ -45,12 +66,12 @@ export const register = async (req: Request, res: Response): Promise<void> => {
       return;
     }
 
-    // Create new user
+    // Create new user with validated role
     const user = await User.create({
       name,
       email: email.toLowerCase(),
       password,
-      role: role || UserRole.SUPPLIER,
+      role: validRole,
     });
 
     // Generate JWT token
@@ -75,10 +96,37 @@ export const register = async (req: Request, res: Response): Promise<void> => {
       },
     });
   } catch (error) {
+    // Log detailed error information for debugging
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+    const errorStack = error instanceof Error ? error.stack : undefined;
+    
     logger.error('Registration error:', {
       workflow: 'authentication',
-      error: error instanceof Error ? error.message : 'Unknown error',
+      error: errorMessage,
+      stack: errorStack,
+      requestBody: {
+        name: req.body?.name,
+        email: req.body?.email,
+        role: req.body?.role,
+      },
     });
+
+    // Check if it's a Mongoose validation error (e.g., invalid enum value)
+    if (error instanceof mongoose.Error.ValidationError) {
+      // Extract validation error messages
+      const validationErrors = Object.values(error.errors).map((err) => err.message);
+      logAuth('Registration failed: Mongoose validation error', undefined, {
+        validationErrors,
+        email: req.body?.email,
+        role: req.body?.role,
+      });
+      res.status(400).json({
+        success: false,
+        message: 'Validation error: ' + validationErrors.join(', '),
+        errors: validationErrors,
+      });
+      return;
+    }
 
     res.status(500).json({
       success: false,
