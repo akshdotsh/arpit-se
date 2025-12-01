@@ -7,6 +7,7 @@ import { Router } from 'express';
 import { body } from 'express-validator';
 import { register, login, getProfile } from '../controllers/authController';
 import { authenticate } from '../middleware/auth';
+import { UserRole } from '../models/User';
 
 const router = Router();
 
@@ -25,6 +26,10 @@ const registerValidation = [
   body('password')
     .isLength({ min: 6 })
     .withMessage('Password must be at least 6 characters long'),
+  body('role')
+    .optional()
+    .isIn(Object.values(UserRole))
+    .withMessage(`Role must be one of: ${Object.values(UserRole).join(', ')}`),
 ];
 
 /**
